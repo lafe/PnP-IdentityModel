@@ -1,5 +1,6 @@
 ﻿using System.IdentityModel.Tokens;
 using System.Security.Cryptography;
+using SharePointPnP.IdentityModel.Extensions.S2S.Exceptions;
 
 namespace SharePointPnP.IdentityModel.Extensions.S2S.Tokens
 {
@@ -9,6 +10,8 @@ namespace SharePointPnP.IdentityModel.Extensions.S2S.Tokens
     /// </summary>
     internal class AsymmetricSignatureProviderFactory
     {
+        private const string EncryptionAlgorithm = "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256";
+
         /// <summary>
         /// Creates a signature provider for an asymmetric encryption scheme. The 
         /// </summary>
@@ -21,7 +24,21 @@ namespace SharePointPnP.IdentityModel.Extensions.S2S.Tokens
         {
             Utility.VerifyNonNullArgument("asymmetricSecurityKey", asymmetricSecurityKey);
 #if NET46
-            var asymmetricAlgorithm = asymmetricSecurityKey.GetAsymmetricAlgorithm("http://www.w3.org/2001/04/xmldsig-more#rsa-sha256", true);
+            if (!asymmetricSecurityKey.IsSupportedAlgorithm(EncryptionAlgorithm))
+            {
+                throw new NotSupportedAlgorithmException($"The given key does not support the algorithm \"{EncryptionAlgorithm}\"");
+            }
+            
+            AsymmetricAlgorithm asymmetricAlgorithm;
+            try
+            {
+                asymmetricAlgorithm = asymmetricSecurityKey.GetAsymmetricAlgorithm(EncryptionAlgorithm, true);
+            }
+            catch (CryptographicException ex)
+            {
+                throw new AsymmetricAlgorithmLoadingException($"The asymmetric algorithm \"{EncryptionAlgorithm}\" could not be loaded from the given key. Check if a private key exists and if the permissions of the private key are set correctly.", ex);
+            }
+
             if (asymmetricAlgorithm is RSACryptoServiceProvider)
             {
                 return new X509AsymmetricSignatureProvider(asymmetricSecurityKey);
